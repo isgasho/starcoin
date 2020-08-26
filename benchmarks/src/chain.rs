@@ -8,12 +8,14 @@ use starcoin_account_api::AccountInfo;
 use starcoin_chain::BlockChain;
 use starcoin_config::{temp_path, DataDirPath};
 use starcoin_consensus::Consensus;
+use starcoin_executor::{create_signed_txn_with_association_account, encode_transfer_script};
 use starcoin_genesis::Genesis;
 use starcoin_storage::cache_storage::CacheStorage;
 use starcoin_storage::db_storage::DBStorage;
 use starcoin_storage::storage::StorageInstance;
 use starcoin_storage::Storage;
-use starcoin_vm_types::chain_config::{ChainNetwork, ConsensusStrategy};
+use starcoin_vm_types::chain_config::{ChainId, ChainNetwork, ConsensusStrategy};
+use starcoin_vm_types::transaction::{Script, SignedUserTransaction, TransactionPayload};
 use std::ops::Deref;
 use std::sync::Arc;
 use traits::{ChainReader, ChainWriter};
@@ -24,6 +26,17 @@ pub struct ChainBencher {
     block_num: u64,
     account: AccountInfo,
     temp_path: DataDirPath,
+}
+
+fn create_transaction(sequence_number: u64, program: Script) -> SignedUserTransaction {
+    create_signed_txn_with_association_account(
+        TransactionPayload::Script(program),
+        sequence_number,
+        400_000,
+        1,
+        ChainNetwork::Test.consensus().now() + sequence_number + 1,
+        ChainId::test(),
+    )
 }
 
 impl ChainBencher {
@@ -57,7 +70,12 @@ impl ChainBencher {
     }
 
     pub fn execute(&self) {
-        for _i in 0..self.block_num {
+        let script = encode_transfer_script(
+            *self.account.address(),
+            self.account.get_auth_key().prefix().to_vec(),
+            1,
+        );
+        for i in 0..self.block_num {
             //let mut txn_vec = Vec::new();
             //txn_vec.push(random_txn(self.count.load(Ordering::Relaxed)));
             let (block_template, _) = self
@@ -67,7 +85,7 @@ impl ChainBencher {
                     *self.account.address(),
                     Some(self.account.get_auth_key().prefix().to_vec()),
                     None,
-                    vec![],
+                    vec![create_transaction(i, script.clone())],
                     vec![],
                     None,
                 )
