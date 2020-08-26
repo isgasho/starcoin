@@ -6,7 +6,7 @@ use criterion::{criterion_group, criterion_main, Benchmark, Criterion};
 
 fn block_apply(c: &mut Criterion) {
     ::logger::init();
-    for i in &[10u64, 1000] {
+    for i in &[50u64, 100, 200, 500, 1000, 2000] {
         c.bench(
             "block_apply",
             Benchmark::new(format!("block_apply_{:?}", i), move |b| {
@@ -35,5 +35,5 @@ fn query_block(c: &mut Criterion) {
     }
 }
 
-criterion_group!(starcoin_chain_benches, block_apply, query_block);
+criterion_group!(starcoin_chain_benches, block_apply);
 criterion_main!(starcoin_chain_benches);

@@ -10,6 +10,7 @@ use move_vm_runtime::data_cache::TransactionEffects;
 use move_vm_runtime::session::Session;
 use move_vm_runtime::{data_cache::RemoteCache, move_vm::MoveVM};
 use once_cell::sync::Lazy;
+use simple_stopwatch::Stopwatch;
 use starcoin_logger::prelude::*;
 use starcoin_move_compiler::check_compat_and_verify_module;
 use starcoin_types::{
@@ -259,6 +260,8 @@ impl StarcoinVM {
         txn_data: &TransactionMetadata,
         package: &Package,
     ) -> Result<(VMStatus, TransactionOutput), VMStatus> {
+        let mut time_vec = vec![];
+        let mut sw = Stopwatch::start_new();
         let mut session = self.move_vm.new_session(remote_cache);
 
         {
@@ -281,7 +284,13 @@ impl StarcoinVM {
                 .map_err(|e| e.into_vm_status())?;
 
             let package_address = package.package_address();
+            //t2
+            time_vec.push(sw.us());
+            sw.restart();
             for module in package.modules() {
+                //t1
+                time_vec.push(sw.us());
+                sw.restart();
                 let compiled_module = match CompiledModule::deserialize(module.code()) {
                     Ok(module) => module,
                     Err(err) => {
@@ -289,7 +298,9 @@ impl StarcoinVM {
                         return Err(err.finish(Location::Undefined).into_vm_status());
                     }
                 };
-
+                //t2
+                time_vec.push(sw.us());
+                sw.restart();
                 let module_id = compiled_module.self_id();
                 if module_id.address() != &package_address {
                     return Err(errors::verification_error(
@@ -301,7 +312,9 @@ impl StarcoinVM {
                     .finish(Location::Undefined)
                     .into_vm_status());
                 }
-
+                //t3
+                time_vec.push(sw.us());
+                sw.restart();
                 //verify module compatibility
                 let _new_module = if session
                     .exists_module(&module_id)
@@ -330,23 +343,46 @@ impl StarcoinVM {
                         .verify_module(module.code())
                         .map_err(|e| e.into_vm_status())?
                 };
+                //t4
+                time_vec.push(sw.us());
+                sw.restart();
                 session
                     .publish_module(module.code().to_vec(), txn_data.sender, cost_strategy)
                     .map_err(|e| e.into_vm_status())?;
+                //t5
+                time_vec.push(sw.us());
+                println!("vm module time vec: {:?}", time_vec.clone());
+                sw.restart();
+                time_vec.clear();
             }
+            //t1
+            time_vec.push(sw.us());
+            sw.restart();
             if let Some(init_script) = package.init_script() {
+                //t2
+                time_vec.push(sw.us());
+                sw.restart();
                 let sender = txn_data.sender;
                 let ty_args = init_script.ty_args().to_vec();
                 let args = convert_txn_args(init_script.args());
+                //t3
+                time_vec.push(sw.us());
+                sw.restart();
                 let s = init_script.code().to_vec();
                 debug!("execute init script by account {:?}", sender);
                 session
                     .execute_script(s, ty_args, args, vec![sender], cost_strategy)
                     .map_err(|e| e.into_vm_status())?
             }
+            //t4
+            time_vec.push(sw.us());
+            sw.restart();
             charge_global_write_gas_usage(cost_strategy, &session)?;
 
             cost_strategy.disable_metering();
+            //t5
+            time_vec.push(sw.us());
+            println!("vm package time vec: {:?}", time_vec);
             self.success_transaction_cleanup(
                 session,
                 gas_schedule,
@@ -522,13 +558,17 @@ impl StarcoinVM {
         remote_cache: &mut StateViewCache<'_>,
         block_metadata: BlockMetadata,
     ) -> Result<TransactionOutput, VMStatus> {
+        let mut time_vec = vec![];
+        let mut sw = Stopwatch::start_new();
         let mut txn_data = TransactionMetadata::default();
         //process block metadata by genesis.
         txn_data.sender = account_config::genesis_address();
 
         let gas_schedule = zero_cost_schedule();
         let mut cost_strategy = CostStrategy::system(&gas_schedule, txn_data.max_gas_amount());
-
+        //t1
+        time_vec.push(sw.us());
+        sw.restart();
         let (parent_id, timestamp, author, auth, uncles, number) = block_metadata.into_inner();
         let args = vec![
             Value::transaction_argument_signer_reference(txn_data.sender),
@@ -543,6 +583,9 @@ impl StarcoinVM {
             Value::u64(number),
         ];
         let mut session = self.move_vm.new_session(remote_cache);
+        //t2
+        time_vec.push(sw.us());
+        sw.restart();
         session.execute_function(
             &account_config::TRANSACTION_MANAGER_MODULE,
             &account_config::BLOCK_PROLOGUE_NAME,
@@ -552,6 +595,9 @@ impl StarcoinVM {
             &mut cost_strategy,
             convert_prologue_runtime_error,
         )?;
+        //t3
+        time_vec.push(sw.us());
+        println!("vm medata time vec: {:?}", time_vec);
         Ok(get_transaction_output(
             &mut (),
             session,
@@ -566,6 +612,8 @@ impl StarcoinVM {
         txn: SignedUserTransaction,
         remote_cache: &mut StateViewCache<'_>,
     ) -> (VMStatus, TransactionOutput) {
+        let mut time_vec = vec![];
+        let mut sw = Stopwatch::start_new();
         let gas_schedule = match self.get_gas_schedule() {
             Ok(gas_schedule) => gas_schedule,
             Err(e) => {
@@ -576,6 +624,9 @@ impl StarcoinVM {
                 }
             }
         };
+        //t1
+        time_vec.push(sw.us());
+        sw.restart();
         let txn_data = TransactionMetadata::new(&txn);
         let mut cost_strategy = CostStrategy::system(gas_schedule, txn_data.max_gas_amount());
         // check signature
@@ -583,6 +634,9 @@ impl StarcoinVM {
             Ok(t) => Ok(t),
             Err(_) => Err(VMStatus::Error(StatusCode::INVALID_SIGNATURE)),
         };
+        //t2
+        time_vec.push(sw.us());
+        sw.restart();
 
         match signature_checked_txn {
             Ok(txn) => {
@@ -602,6 +656,9 @@ impl StarcoinVM {
                         p,
                     ),
                 };
+                //t3
+                time_vec.push(sw.us());
+                println!("vm usr time vec: {:?}", time_vec);
                 match result {
                     Ok(status_and_output) => status_and_output,
                     Err(err) => {
@@ -632,14 +689,22 @@ impl StarcoinVM {
         transactions: Vec<Transaction>,
         block_gas_limit: Option<u64>,
     ) -> Result<Vec<(VMStatus, TransactionOutput)>> {
+        let mut time_vec = vec![];
+        let mut sw = Stopwatch::start_new();
         let mut data_cache = StateViewCache::new(state_view);
         let mut result = vec![];
         //TODO load config by config change event.
         self.load_configs(&data_cache)?;
+        //t1
+        time_vec.push(sw.us());
+        sw.restart();
 
         let mut gas_left = block_gas_limit.unwrap_or(u64::MAX);
 
         let blocks = chunk_block_transactions(transactions);
+        //t2
+        time_vec.push(sw.us());
+        sw.restart();
         'outer: for block in blocks {
             match block {
                 TransactionBlock::UserTransaction(txns) => {
@@ -689,6 +754,9 @@ impl StarcoinVM {
                 }
             }
         }
+        //t1
+        time_vec.push(sw.us());
+        println!("vm time vec: {:?}", time_vec);
         Ok(result)
     }
 

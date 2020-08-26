@@ -1,6 +1,7 @@
 // Copyright (c) The Starcoin Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use simple_stopwatch::Stopwatch;
 use starcoin_crypto::HashValue;
 use starcoin_state_api::ChainState;
 use starcoin_types::error::BlockExecutorError;
@@ -32,10 +33,14 @@ pub fn block_execute(
     txns: Vec<Transaction>,
     block_gas_limit: u64,
 ) -> ExecutorResult<BlockExecutedData> {
+    let mut time_vec = vec![];
+    let mut sw = Stopwatch::start_new();
     let txn_outputs =
         crate::execute_block_transactions(chain_state.as_super(), txns.clone(), block_gas_limit)
             .map_err(BlockExecutorError::BlockTransactionExecuteErr)?;
-
+    //t1
+    time_vec.push(sw.us());
+    sw.restart();
     let mut executed_data = BlockExecutedData::default();
     for (txn, output) in txns
         .iter()
@@ -72,6 +77,9 @@ pub fn block_execute(
             }
         };
     }
+    //t2
+    time_vec.push(sw.us());
+    println!("block exe time vec: {:?}", time_vec);
 
     executed_data.state_root = chain_state.state_root();
     Ok(executed_data)

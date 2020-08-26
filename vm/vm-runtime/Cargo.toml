@@ -24,7 +24,7 @@ scs = { package="starcoin-canonical-serialization", path = "../../commons/scs"}
 stdlib = { package="stdlib", path = "../stdlib"}
 starcoin-vm-types = { path = "../types"}
 starcoin-move-compiler = { path = "../compiler"}
-
+simple-stopwatch="0.1.4"
 
 [dev-dependencies]
 

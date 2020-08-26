@@ -5,6 +5,7 @@ use anyhow::{ensure, format_err, Result};
 use consensus::Consensus;
 use crypto::HashValue;
 use logger::prelude::*;
+use simple_stopwatch::Stopwatch;
 use starcoin_accumulator::{
     node::AccumulatorStoreType, Accumulator, AccumulatorTreeStore, MerkleAccumulator,
 };
@@ -520,6 +521,8 @@ impl BlockChain {
         execute: bool,
         state_reader: Option<&dyn ChainStateReader>,
     ) -> Result<()> {
+        let mut time_vec = vec![];
+        let mut sw = Stopwatch::start_new();
         let header = block.header();
         let block_id = header.id();
         let is_genesis = header.is_genesis();
@@ -528,7 +531,9 @@ impl BlockChain {
             block.header().gas_used() <= block.header().gas_limit(),
             "invalid block: gas_used should not greater than gas_limit"
         );
-
+        //t1
+        time_vec.push(sw.us());
+        sw.restart();
         if !is_genesis {
             let account_reader = match state_reader {
                 Some(state_reader) => AccountStateReader::new(state_reader),
@@ -543,6 +548,9 @@ impl BlockChain {
                 }
             }
         }
+        //t2
+        time_vec.push(sw.us());
+        sw.restart();
 
         let txns = {
             let mut t = if is_genesis {
@@ -566,6 +574,9 @@ impl BlockChain {
         } else {
             self.verify_txns(block_id, txns.as_slice())?
         };
+        //t3
+        time_vec.push(sw.us());
+        sw.restart();
         let state_root = executed_data.state_root;
         let vec_transaction_info = &executed_data.txn_infos;
         verify_block!(
@@ -589,6 +600,10 @@ impl BlockChain {
             "invalid txn num in the block"
         );
 
+        //t4
+        time_vec.push(sw.us());
+        sw.restart();
+
         // txn accumulator verify.
         let executed_accumulator_root = {
             let included_txn_info_hashes: Vec<_> =
@@ -597,6 +612,9 @@ impl BlockChain {
                 self.txn_accumulator.append(&included_txn_info_hashes)?;
             accumulator_root
         };
+        //t5
+        time_vec.push(sw.us());
+        sw.restart();
 
         verify_block!(
             VerifyBlockField::Header,
@@ -609,9 +627,16 @@ impl BlockChain {
         self.txn_accumulator
             .flush()
             .map_err(|_err| BlockExecutorError::BlockAccumulatorFlushErr)?;
+        //t6
+        time_vec.push(sw.us());
+        sw.restart();
+
         self.chain_state
             .flush()
             .map_err(BlockExecutorError::BlockChainStateErr)?;
+        //t7
+        time_vec.push(sw.us());
+        sw.restart();
 
         let total_difficulty = {
             if is_genesis {
@@ -623,9 +648,17 @@ impl BlockChain {
                 pre_total_difficulty + header.difficulty()
             }
         };
+        //t8
+        time_vec.push(sw.us());
+        sw.restart();
 
         self.block_accumulator.append(&[block.id()])?;
         self.block_accumulator.flush()?;
+
+        //t9
+        time_vec.push(sw.us());
+        sw.restart();
+
         let txn_accumulator_info: AccumulatorInfo = (&self.txn_accumulator).try_into()?;
         let block_accumulator_info: AccumulatorInfo = (&self.block_accumulator).try_into()?;
         let block_info = BlockInfo::new_with_accumulator_info(
@@ -645,12 +678,20 @@ impl BlockChain {
                 None
             },
         )?;
+
+        //t10
+        time_vec.push(sw.us());
+        sw.restart();
+
         let block_state = if execute {
             BlockState::Executed
         } else {
             BlockState::Verified
         };
         self.commit(block, block_info, block_state)?;
+        //t11
+        time_vec.push(sw.us());
+        println!("time vec: {:?}", time_vec);
         Ok(())
     }
 
