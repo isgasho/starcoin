@@ -97,12 +97,17 @@ echo "Cleaning project..."
 
 # Run tests
 echo "Running tests..."
-while read -r line; do
-  dirline=$(realpath $(dirname "$line"))
+#while read -r line; do
+ # dirline=$(realpath $(dirname "$line"))
   # Don't fail out of the loop here. We just want to run the test binary
   # to collect its profile data.
-  (cd "$dirline" && pwd && cargo test || true)
-done < <(find "$TEST_DIR" -name 'Cargo.toml')
+  #(cd "$dirline" && pwd && cargo test || true)
+#done < <(find "$TEST_DIR" -name 'Cargo.toml')
+
+(
+  cd "$TEST_DIR"
+  cargo test
+)
 
 cargo test --test integration -- -e "cmd"
 
