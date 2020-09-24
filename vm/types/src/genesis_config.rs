@@ -58,6 +58,7 @@ pub enum ConsensusStrategy {
     Dev = 1,
     Argon = 2,
     Keccak = 3,
+    CryptoNight = 4,
 }
 
 impl ConsensusStrategy {
@@ -79,6 +80,7 @@ impl fmt::Display for ConsensusStrategy {
             ConsensusStrategy::Dev => write!(f, "dev"),
             ConsensusStrategy::Argon => write!(f, "argon"),
             ConsensusStrategy::Keccak => write!(f, "keccak"),
+            ConsensusStrategy::CryptoNight => write!(f, "cryptonight"),
         }
     }
 }
@@ -92,6 +94,7 @@ impl FromStr for ConsensusStrategy {
             "dev" => Ok(ConsensusStrategy::Dev),
             "argon" => Ok(ConsensusStrategy::Argon),
             "keccak" => Ok(ConsensusStrategy::Keccak),
+            "cryptonight" => Ok(ConsensusStrategy::CryptoNight),
             s => Err(format_err!("Unknown ConsensusStrategy: {}", s)),
         }
     }
