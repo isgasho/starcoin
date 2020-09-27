@@ -97,14 +97,14 @@ echo "Cleaning project..."
 
 # Run tests
 echo "Running tests..."
-while read -r line; do
-  dirline=$(realpath $(dirname "$line"))
+##while read -r line; do
+  #dirline=$(realpath $(dirname "$line"))
   # Don't fail out of the loop here. We just want to run the test binary
   # to collect its profile data.
-  (cd "$dirline" && pwd && cargo test || true)
-done < <(find "$TEST_DIR" -name 'Cargo.toml')
-
-cargo test --test integration -- -e "cmd"
+  #(cd "$dirline" && pwd && cargo test || true)
+#done < <(find "$TEST_DIR" -name 'Cargo.toml')
+cargo test
+#cargo test --test integration -- -e "cmd"
 
 # Make the coverage directory if it doesn't exist
 if [ ! -d "$COVERAGE_DIR" ]; then
